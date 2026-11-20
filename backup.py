@@ -79,42 +79,12 @@ options:
     description: Write a C(.sha256) file next to each archive.
     type: bool
     default: true
-  report_url:
+  notify_url:
     description:
-      - Opt-in "phone home". If set, the module sends an HTTP GET with the status as
-        query-string parameters after each real run (never in check mode). Nothing is sent when unset.
-      - Can be left out of the playbook and set on the managed host in I(report_config) instead.
-        A task parameter overrides the file.
-      - Parameters are host, name, status, mode, compression, archive (base name only), size,
-        checksum, removed, duration_s, finished, error. No paths or file lists.
-      - Query strings show up in web server and proxy logs, so use HTTPS and do not put secrets in the URL.
+      - If set, the module sends a single HTTP GET to this URL after a successful run
+        (never in check mode). Nothing is sent when unset.
+      - A delivery problem only produces a warning, it never fails the backup.
     type: str
-  report_config:
-    description:
-      - Optional file on the managed host with C(url=) and C(token=) lines (C(#) comments allowed).
-        Used when I(report_url) / I(report_token) are not given. Missing file means no reporting.
-    type: path
-    default: /etc/backup-module/report.conf
-  report_token:
-    description: Bearer token sent as C(Authorization) header with the report (header, not query string).
-    type: str
-  report_on:
-    description: When to send the report.
-    type: str
-    choices: [always, success, failure]
-    default: always
-  report_timeout:
-    description: Seconds to wait for the report endpoint.
-    type: int
-    default: 10
-  validate_certs:
-    description: Validate the TLS certificate of the report endpoint (used by C(report_url)).
-    type: bool
-    default: true
-  report_required:
-    description: Fail the task if the report cannot be delivered. By default a delivery problem only warns, so monitoring outages never break backups.
-    type: bool
-    default: false
   keep_fulls:
     description:
       - Retention. Keep the newest N full backups together with their incrementals;
@@ -173,14 +143,6 @@ checksum:
   description: SHA-256 of the archive.
   type: str
   returned: when checksum is true and not check_mode
-report:
-  description: Result of the phone-home call (only when I(report_url) is set and a report was due).
-  type: dict
-  returned: when sent
-  contains:
-    sent: {description: Whether the endpoint accepted the report, type: bool}
-    status: {description: HTTP status, type: int}
-    msg: {description: Error detail if not sent, type: str}
 removed:
   description: Archives deleted by retention.
   type: list
@@ -195,14 +157,8 @@ import os
 import re
 import json
 import shutil
-import socket
 import time
 import zlib
-
-try:
-    from urllib.parse import urlencode
-except ImportError:
-    from urllib import urlencode
 
 from ansible.module_utils.basic import AnsibleModule
 from ansible.module_utils.urls import fetch_url
@@ -344,38 +300,16 @@ def expand_includes(source, patterns):
     return sorted(result)
 
 
-def load_report_config(path):
-    """Read url=/token= lines from a small config file; {} if absent or unreadable."""
-    conf = {}
+def http_get(module, url):
+    """Send a GET request to url. Warns on failure, never raises."""
     try:
-        with open(path) as fh:
-            for line in fh:
-                line = line.strip()
-                if not line or line.startswith('#') or '=' not in line:
-                    continue
-                key, _sep, val = line.partition('=')
-                conf[key.strip().lower()] = val.strip()
-    except (IOError, OSError):
-        pass
-    return conf
-
-
-def phone_home(module, p, payload):
-    """Send the status as an HTTP GET. Returns dict(sent, status, msg). Never raises."""
-    params = dict((k, v) for k, v in payload.items() if v is not None)
-    url = p['report_url']
-    url += ('&' if '?' in url else '?') + urlencode(sorted(params.items()))
-    headers = {'User-Agent': 'ansible-backup-module'}
-    if p['report_token']:
-        headers['Authorization'] = 'Bearer %s' % p['report_token']
-    try:
-        resp, info = fetch_url(module, url, headers=headers, method='GET',
-                               timeout=p['report_timeout'], use_proxy=True)
+        _resp, info = fetch_url(module, url, method='GET', timeout=10)
     except Exception as exc:
-        return dict(sent=False, status=-1, msg=str(exc))
+        module.warn('GET %s failed: %s' % (url, exc))
+        return
     status = info.get('status', -1)
-    ok = 200 <= status < 300
-    return dict(sent=ok, status=status, msg='' if ok else info.get('msg', 'delivery failed'))
+    if not 200 <= status < 300:
+        module.warn('GET %s failed: %s %s' % (url, status, info.get('msg', '')))
 
 
 def main():
@@ -397,61 +331,14 @@ def main():
             compressed_fraction_pct=dict(type='int', default=50),
             checksum=dict(type='bool', default=True),
             keep_fulls=dict(type='int', default=0),
-            report_url=dict(type='str'),
-            report_token=dict(type='str', no_log=True),
-            report_config=dict(type='path', default='/etc/backup-module/report.conf'),
-            report_on=dict(type='str', default='always',
-                           choices=['always', 'success', 'failure']),
-            report_timeout=dict(type='int', default=10),
-            validate_certs=dict(type='bool', default=True),
-            report_required=dict(type='bool', default=False),
+            notify_url=dict(type='str'),
         ),
         supports_check_mode=True,
     )
     p = module.params
     source, dest, name = p['source'], p['destination'], p['name']
-    started = time.time()
-    if not p['report_url'] or not p['report_token']:
-        conf = load_report_config(p['report_config'])
-        p['report_url'] = p['report_url'] or conf.get('url')
-        p['report_token'] = p['report_token'] or conf.get('token')
-    state = {}
-
-    def report(success, msg=''):
-        if not p['report_url'] or module.check_mode:
-            return None
-        if p['report_on'] == 'success' and not success:
-            return None
-        if p['report_on'] == 'failure' and success:
-            return None
-        payload = dict(
-            host=socket.gethostname(),
-            name=name,
-            status='success' if success else 'failure',
-            mode=state.get('mode', p['mode']),
-            compression=state.get('compression'),
-            archive=os.path.basename(state['archive']) if state.get('archive') else None,
-            size=state.get('size'),
-            checksum=state.get('checksum'),
-            removed=len(state.get('removed', [])),
-            duration_s=round(time.time() - started, 1),
-            finished=time.strftime('%Y-%m-%dT%H:%M:%S%z'),
-            error=(msg or '')[:200] or None,
-        )
-        outcome = phone_home(module, p, payload)
-        if not outcome['sent']:
-            text = 'report to %s failed: %s %s' % (p['report_url'], outcome['status'], outcome['msg'])
-            if p['report_required']:
-                module.fail_json(msg=text, report=outcome)
-            module.warn(text)
-        return outcome
-    def fail(msg, **kw):
-        outcome = report(False, msg)
-        if outcome is not None:
-            kw['report'] = outcome
-        module.fail_json(msg=msg, **kw)
     if not os.path.isdir(source):
-        fail("source '%s' is not a directory" % source)
+        module.fail_json(msg="source '%s' is not a directory" % source)
     tar = module.get_bin_path('tar', required=True)
     snapshot = os.path.join(dest, name + '.snar')
     mode = p['mode']
@@ -461,7 +348,7 @@ def main():
     if p['include']:
         members = expand_includes(source, p['include'])
         if not members:
-            fail("include patterns matched nothing in %s" % source)
+            module.fail_json(msg="include patterns matched nothing in %s" % source)
     else:
         members = ['.']
 
@@ -473,7 +360,6 @@ def main():
 
     result = dict(changed=True, archive=archive, mode=mode, snapshot=snapshot,
                   compression=comp, compression_reason=reason)
-    state.update(mode=mode, compression=comp)
 
     if module.check_mode:
         if p['keep_fulls'] > 0 and os.path.isdir(dest):
@@ -501,7 +387,7 @@ def main():
         for f in (archive, work_snar):
             if os.path.exists(f):
                 os.remove(f)
-        fail('tar failed', rc=rc, stderr=err, cmd=' '.join(cmd))
+        module.fail_json(msg='tar failed', rc=rc, stderr=err, cmd=' '.join(cmd))
     os.rename(work_snar, snapshot)
     result['size'] = os.path.getsize(archive)
     if p['checksum']:
@@ -513,10 +399,8 @@ def main():
         result['removed'] = apply_retention(dest, name, p['keep_fulls'], False)
     if rc == 1:
         result['warnings'] = ['tar: some files changed while being archived']
-    state.update(result)
-    outcome = report(True)
-    if outcome is not None:
-        result['report'] = outcome
+    if p['notify_url']:
+        http_get(module, p['notify_url'])
     module.exit_json(**result)
 
 
