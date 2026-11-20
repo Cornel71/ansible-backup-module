@@ -1,0 +1,17 @@
+---
+- hosts: localhost
+  tasks:
+    - name: Test run
+      backup:
+        source:
+        destination:
+        name: test
+        mode: full
+        compression: auto
+        auto_strategy: ratio
+        ratio_gain_pct: 10
+        auto_threshold_mb: 2048
+        exclude: ["*.log", "cache/*", "*.tmp"]
+        keep_fulls: 4
+        notify_url: https://www.companyx.ro/index.html?backup=done
+      when: ansible_date_time.weekday_number == "0"
