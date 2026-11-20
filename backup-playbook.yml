@@ -1,0 +1,28 @@
+---
+- hosts: all
+  become: true
+  tasks:
+    - name: Full backup (Sundays) - auto picks gzip or bzip2 by measured ratio
+      backup:
+        source: /var/www
+        destination: /backup/www
+        name: www
+        mode: full
+        compression: auto
+        auto_strategy: ratio        # or: type, size
+        ratio_gain_pct: 10          # bzip2 must beat gzip by 10% to be chosen
+        auto_threshold_mb: 2048     # above this, never bzip2
+        exclude: ["*.log", "cache/*", "*.tmp"]
+        keep_fulls: 4
+      when: ansible_date_time.weekday_number == "0"
+
+    - name: Incremental backup (other days) - forced gzip
+      backup:
+        source: /var/www
+        destination: /backup/www
+        name: www
+        mode: incremental
+        compression: gzip
+        include: ["html", "uploads"]
+        exclude: ["*.log"]
+      when: ansible_date_time.weekday_number != "0"
