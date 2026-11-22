@@ -3,11 +3,11 @@
   tasks:
     - name: Test run
       backup:
-        source:
-        destination:
+        source: ~/ANSIBLE_WORK/ansible-api-module
+        destination: ~/ANSIBLE_WORK
         name: test
         mode: full
-        compression: auto
+        compression: bzip2
         auto_strategy: ratio
         ratio_gain_pct: 10
         auto_threshold_mb: 2048

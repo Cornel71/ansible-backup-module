@@ -1,0 +1,28 @@
+2026-11-22 09:25:34,087 p=69558 u=cornel n=ansible INFO| Using /home/cornel/ANSIBLE_WORK/ansible-backup-module/ansible.cfg as config file
+2026-11-22 09:25:34,126 p=69558 u=cornel n=ansible WARNING| [WARNING]: No inventory was parsed, only implicit localhost is available
+
+2026-11-22 09:25:34,128 p=69558 u=cornel n=ansible WARNING| [WARNING]: provided hosts list is empty, only localhost is available. Note that the implicit localhost does not match 'all'
+
+2026-11-22 09:25:34,251 p=69558 u=cornel n=ansible INFO| PLAY [localhost] *********************************************************************************************************************************************************************************************************************************************
+2026-11-22 09:25:34,258 p=69558 u=cornel n=ansible INFO| TASK [Gathering Facts] ***************************************************************************************************************************************************************************************************************************************
+2026-11-22 09:25:34,969 p=69558 u=cornel n=ansible INFO| ok: [localhost]
+2026-11-22 09:25:34,972 p=69558 u=cornel n=ansible INFO| TASK [Test run] **********************************************************************************************************************************************************************************************************************************************
+2026-11-22 09:25:36,442 p=69558 u=cornel n=ansible WARNING| [WARNING]: GET https://www.companyx.ro/index.html?backup=done failed: 403 HTTP Error 403: Forbidden
+
+2026-11-22 09:25:36,442 p=69558 u=cornel n=ansible INFO| changed: [localhost] => {"archive": "/home/cornel/ANSIBLE_WORK/test-20261122T092535-full.tar.gz", "changed": true, "checksum": "b0a026d9ecab36d0703cd368e66dd78067c08e958544f3c6d43f9771275f18e9", "compression": "gz", "compression_reason": "auto/ratio: bzip2 gain below 10%; sample 3.8 MB: gzip 81.6%, bzip2 77.3% of original, bzip2 gain 5.2%", "mode": "full", "removed": [], "size": 39604092, "snapshot": "/home/cornel/ANSIBLE_WORK/test.snar"}
+2026-11-22 09:25:36,443 p=69558 u=cornel n=ansible INFO| PLAY RECAP ***************************************************************************************************************************************************************************************************************************************************
+2026-11-22 09:25:36,443 p=69558 u=cornel n=ansible INFO| localhost                  : ok=2    changed=1    unreachable=0    failed=0    skipped=0    rescued=0    ignored=0   
+2026-11-22 09:26:48,029 p=69856 u=cornel n=ansible INFO| Using /home/cornel/ANSIBLE_WORK/ansible-backup-module/ansible.cfg as config file
+2026-11-22 09:26:48,064 p=69856 u=cornel n=ansible WARNING| [WARNING]: No inventory was parsed, only implicit localhost is available
+
+2026-11-22 09:26:48,066 p=69856 u=cornel n=ansible WARNING| [WARNING]: provided hosts list is empty, only localhost is available. Note that the implicit localhost does not match 'all'
+
+2026-11-22 09:26:48,146 p=69856 u=cornel n=ansible INFO| PLAY [localhost] *********************************************************************************************************************************************************************************************************************************************
+2026-11-22 09:26:48,150 p=69856 u=cornel n=ansible INFO| TASK [Gathering Facts] ***************************************************************************************************************************************************************************************************************************************
+2026-11-22 09:26:48,835 p=69856 u=cornel n=ansible INFO| ok: [localhost]
+2026-11-22 09:26:48,837 p=69856 u=cornel n=ansible INFO| TASK [Test run] **********************************************************************************************************************************************************************************************************************************************
+2026-11-22 09:26:51,422 p=69856 u=cornel n=ansible WARNING| [WARNING]: GET https://www.companyx.ro/index.html?backup=done failed: 403 HTTP Error 403: Forbidden
+
+2026-11-22 09:26:51,423 p=69856 u=cornel n=ansible INFO| changed: [localhost] => {"archive": "/home/cornel/ANSIBLE_WORK/test-20261122T092649-full.tar.bz2", "changed": true, "checksum": "6f791b5c597357468b101447ef79377bec178edd628eae1499430023789ae9d9", "compression": "bz2", "compression_reason": "requested explicitly", "mode": "full", "removed": [], "size": 39898803, "snapshot": "/home/cornel/ANSIBLE_WORK/test.snar"}
+2026-11-22 09:26:51,423 p=69856 u=cornel n=ansible INFO| PLAY RECAP ***************************************************************************************************************************************************************************************************************************************************
+2026-11-22 09:26:51,423 p=69856 u=cornel n=ansible INFO| localhost                  : ok=2    changed=1    unreachable=0    failed=0    skipped=0    rescued=0    ignored=0   
